@@ -91,8 +91,7 @@ public class TBillRate implements Serializable {
     }
 
     public Double getClosingPrice() {
-        // TODO: implementation of this method is left as an exercise
-        return 0.0;
+        return 100.0 - close * (91 / 360.0);
     }
 
     public boolean isEndOfMonth() {
