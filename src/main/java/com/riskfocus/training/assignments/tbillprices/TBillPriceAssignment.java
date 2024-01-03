@@ -24,10 +24,9 @@ import com.riskfocus.training.assignments.functions.ComputeReturns;
 import com.riskfocus.training.assignments.functions.ComputeVolatility;
 import com.riskfocus.training.assignments.functions.MonthlyAverage;
 import com.riskfocus.training.assignments.utils.ExerciseBase;
-import org.apache.flink.api.common.typeinfo.Types;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
-import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import com.riskfocus.training.assignments.domain.TBillRate;
@@ -100,17 +99,19 @@ public class TBillPriceAssignment extends ExerciseBase {
     }
 
     public static DataStream<Tuple3<LocalDateTime, Double, Double>> getPrices(DataStream<TBillRate> rates) {
-        // For unit testing, pass in args array such as: ["2008-01","2020-03"] etc
-        // TODO: implementation has been left as an exercise
-        return  null;
+        return rates.<Tuple3<LocalDateTime, Double, Double>>map(new MapFunction<TBillRate, Tuple3<LocalDateTime, Double, Double>>() {
+            @Override
+            public Tuple3<LocalDateTime, Double, Double> map(TBillRate rate) throws Exception {
+                return Tuple3.of(rate.getQuoteTime(), rate.getClose(), rate.getClosingPrice());
+            }
+        });
     }
 
     public static DataStream<PriceReturns> computeReturns(DataStream<TBillRate> rates) {
-        // Get a stream of price returns
-        // Since we are dealing with streams, as a work-around for reduce remove first element from each group
-        // TODO: Implementation left as an exercise. Create a window and call the processing method with ComputeReturns also
-        // an exercise for implementation.
-        return null;
+        return rates.keyBy(TBillRate::getKey)
+                .countWindow(2, 1)
+                .process(new ComputeReturns());
+
     }
 
     public static DataStream<MonthlyAverageReturn> computeAverages(DataStream<PriceReturns> priceReturns) {
@@ -120,8 +121,10 @@ public class TBillPriceAssignment extends ExerciseBase {
 
     public static DataStream<Tuple2<String, Double>> computeVolatility(DataStream<PriceReturns> priceReturns,
                                                                        DataStream<MonthlyAverageReturn> avgReturns) {
-        // TODO: the implementation has been left as an exercise
-        return null;
+
+        return priceReturns.connect(avgReturns)
+                .keyBy(priceReturns1 -> getKey(priceReturns1.getDate()), MonthlyAverageReturn::getDate)
+                .flatMap(new ComputeVolatility());
     }
 
 }
